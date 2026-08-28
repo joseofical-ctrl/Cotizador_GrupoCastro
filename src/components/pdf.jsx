@@ -50,50 +50,33 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
 
       localStorage.setItem('historialCotizaciones', JSON.stringify(nuevoHistorial));
 
+      // --- FOOTER FIJO (Solo Garantía y Línea Roja) ---
       const agregarFooter = (documento) => {
-        const techY = 245; 
-        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.hikvisionhuancayo.com/";
-        documento.addImage(qrUrl, 'PNG', 12, techY, 22, 22);
+        const footerLineY = 282; 
         
-        documento.setFontSize(9);
-        documento.setTextColor(0, 0, 0);
-        documento.setFont("helvetica", "bold");
-        documento.text("Técnico Instalador:", 38, techY + 6);
-        documento.setFontSize(11);
-        documento.text("NILTON H. CASTRO M.", 38, techY + 12);
-        documento.setFont("helvetica", "bold");
-        documento.setTextColor(200, 0, 0);
-        documento.setFontSize(9);
-        documento.text("Cel. 993996443", 38, techY + 18);
-
-        const footerLineY = techY + 25;
-        documento.setDrawColor(230, 230, 230);
+        documento.setDrawColor(200, 0, 0); 
+        documento.setLineWidth(0.5);
         documento.line(12, footerLineY, 198, footerLineY);
-        
-        documento.setFontSize(8);
-        documento.setTextColor(150);
-        documento.setFont("helvetica", "normal");
-        documento.text("1.- Duración de la Oferta: 5 días calendarios.", 12, footerLineY + 5);
-        documento.text("2.- Pago del 100% al momento de iniciar la instalación de equipos.", 12, footerLineY + 9);
-        documento.text("3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.", 12, footerLineY + 13);
         
         documento.setFontSize(11);
         documento.setTextColor(150, 0, 0);
         documento.setFont("helvetica", "bold");
-        documento.text("4 AÑOS GARANTÍA EN EQUIPOS HIKVISION", 105, footerLineY + 19, { align: 'center' });
+        documento.text("4 AÑOS GARANTÍA EN EQUIPOS HIKVISION", 105, footerLineY + 6, { align: 'center' });
       };
 
       doc.setFillColor(150, 0, 0);
       doc.rect(0, 0, 210, 8, 'F');
       
-      doc.addImage(logoPrincipal, 'WEBP', 12, 12, 55, 16);
+      // OPTIMIZACIÓN 1: Corregido a 'JPEG' y compresión 'FAST' con alias 'logo'
+      doc.addImage(logoPrincipal, 'JPEG', 12, 12, 55, 16, 'logo', 'FAST');
       
       const marcasStart = 90; 
       const separacionHorizontal = 32;
-      doc.addImage(marcasLogos.hikvision, 'WEBP', marcasStart, 14, 25, 5);
-      doc.addImage(marcasLogos.dahua, 'WEBP', marcasStart + separacionHorizontal, 14, 18, 5);
-      doc.addImage(marcasLogos.starlink, 'WEBP', marcasStart, 23, 20, 5); 
-      doc.addImage(marcasLogos.ezviz, 'WEBP', marcasStart + separacionHorizontal, 23, 18, 5);
+      // OPTIMIZACIÓN 2: Compresión 'FAST' y alias para las marcas pequeñas
+      doc.addImage(marcasLogos.hikvision, 'WEBP', marcasStart, 14, 25, 5, 'hik', 'FAST');
+      doc.addImage(marcasLogos.dahua, 'WEBP', marcasStart + separacionHorizontal, 14, 18, 5, 'dah', 'FAST');
+      doc.addImage(marcasLogos.starlink, 'WEBP', marcasStart, 23, 20, 5, 'sta', 'FAST'); 
+      doc.addImage(marcasLogos.ezviz, 'WEBP', marcasStart + separacionHorizontal, 23, 18, 5, 'ezv', 'FAST');
 
       doc.setFontSize(8);
       doc.text("RUC: 10446038643", 198, 15, { align: 'right' });
@@ -131,7 +114,6 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
 
       const tableBody = [];
       items.forEach(item => {
-        // FILA PRINCIPAL
         tableBody.push([
           { content: item.cantidad, styles: { halign: 'center', valign: 'middle' } },
           { content: '', _customMarca: item.marca, _customModelo: item.modelo }, 
@@ -139,17 +121,14 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
           { content: `S/ ${formatearMoneda(item.precioTotalFila)}`, styles: { halign: 'right', valign: 'middle' } }
         ]);
 
-        // FILA DE DETALLE (100% Nativo de AutoTable)
         if (item.detalle) {
-          // Limpieza extrema: Borramos espacios invisibles, saltos de línea y tabulaciones del copy-paste
           const detalleLimpio = item.detalle.replace(/[\r\n\t\u00A0\u200B]+/g, ' ').replace(/\s+/g, ' ').trim();
-
           tableBody.push([
             { 
-              content: detalleLimpio, // AutoTable hará el salto de línea perfecto
-              colSpan: 4,             // Que abarque toda la tabla
+              content: detalleLimpio, 
+              colSpan: 4,
               styles: { 
-                halign: 'left',       // Izquierda nativa. NADA de justificados extraños.
+                halign: 'left',
                 valign: 'middle',
                 fontSize: 7.5,
                 textColor: [100, 100, 100],
@@ -164,7 +143,7 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
 
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 5,
-        margin: { left: 12, right: 12, bottom: 55 },
+        margin: { left: 12, right: 12, bottom: 25 }, 
         head: [['CANT', 'DESCRIPCIÓN DEL EQUIPO', 'P. UNIT', 'TOTAL']],
         body: tableBody,
         headStyles: { fillColor: [150, 0, 0], textColor: 255, fontStyle: 'bold' },
@@ -179,7 +158,6 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
         didDrawPage: function () {
           agregarFooter(doc);
         },
-        // --- SOLO interceptamos la fila de Marca/Modelo. Dejamos el Detalle en paz. ---
         didParseCell: function (data) {
           if (data.section === 'body' && data.cell.raw && data.cell.raw._customMarca) {
             doc.setFont("helvetica", "bold");
@@ -229,7 +207,7 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
 
       let totalY = doc.lastAutoTable.finalY + 12;
       
-      if (totalY > 235) {
+      if (totalY > 265) {
         doc.addPage();
         agregarFooter(doc); 
         totalY = 25; 
@@ -243,10 +221,40 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
       doc.setTextColor(150, 0, 0); 
       doc.setFontSize(14); 
       doc.text("TOTAL A PAGAR S/", 198 - anchoNumero - 3, totalY, { align: 'right' });
-      
       doc.setFontSize(24); 
       doc.text(textoSuma, 198, totalY, { align: 'right' });
       doc.setTextColor(0, 0, 0); 
+
+      let bloqueY = totalY + 15;
+      
+      if (bloqueY + 40 > 275) {
+        doc.addPage();
+        agregarFooter(doc);
+        bloqueY = 25;
+      }
+
+      const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.hikvisionhuancayo.com/";
+      // OPTIMIZACIÓN 3: Compresión 'FAST' para el código QR
+      doc.addImage(qrUrl, 'PNG', 12, bloqueY, 22, 22, 'qr', 'FAST');
+      
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text("Técnico Instalador:", 38, bloqueY + 6);
+      doc.setFontSize(11);
+      doc.text("NILTON H. CASTRO M.", 38, bloqueY + 12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(200, 0, 0);
+      doc.setFontSize(9);
+      doc.text("Cel. 993996443", 38, bloqueY + 18);
+
+      const terminosY = bloqueY + 30;
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.setFont("helvetica", "normal");
+      doc.text("1.- Duración de la Oferta: 5 días calendarios.", 12, terminosY);
+      doc.text("2.- Pago del 100% al momento de iniciar la instalación de equipos.", 12, terminosY + 4);
+      doc.text("3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.", 12, terminosY + 8);
 
       doc.save(`Proforma_GrupoCastro_${cliente.nombre}.pdf`);
       onDescargar(); 
@@ -342,27 +350,26 @@ export default function PDFPreview({ items, cliente, total, editId, onVolver, on
             </div>
          </div>
 
+         <div className="flex items-start gap-8 px-2 mb-6">
+           <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://www.hikvisionhuancayo.com/" className="w-[22mm] border border-slate-100 p-1" />
+           <div className="pt-1">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Técnico Instalador</p>
+              <p className="text-[14px] font-black uppercase text-slate-800 leading-none">NILTON H. CASTRO M.</p>
+              <p className="text-[11px] font-bold text-red-600 mt-1">Cel. 993996443</p>
+           </div>
+         </div>
+         
+         <div className="text-[10px] space-y-1 text-slate-400 px-2 mb-6 text-left">
+           <p>1.- Duración de la Oferta: 5 días calendarios.</p>
+           <p>2.- Pago del 100% al momento de iniciar la instalación de equipos.</p>
+           <p>3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.</p>
+         </div>
+
          <div className="flex-grow"></div>
 
-         <footer className="mt-auto pt-4 border-t border-slate-100 text-left w-full">
-            <div className="flex items-start gap-8 px-2 mb-4">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://www.hikvisionhuancayo.com/" className="w-[22mm] border border-slate-100 p-1" />
-              <div className="pt-1">
-                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Técnico Instalador</p>
-                 <p className="text-[14px] font-black uppercase text-slate-800 leading-none">NILTON H. CASTRO M.</p>
-                 <p className="text-[11px] font-bold text-red-600 mt-1">Cel. 993996443</p>
-              </div>
-            </div>
-            
-            <div className="text-[10px] space-y-1 text-slate-400 border-t border-slate-100 pt-4 px-2">
-              <p>1.- Duración de la Oferta: 5 días calendarios.</p>
-              <p>2.- Pago del 100% al momento de iniciar la instalación de equipos.</p>
-              <p>3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.</p>
-              <div className="pt-4 text-center">
-                <p className="text-red-600 font-black text-[14px] uppercase italic leading-none">4 AÑOS GARANTÍA EN EQUIPOS HIKVISION</p>
-                <p className="text-slate-300 font-bold text-[10px] uppercase mt-1 italic">www.hikvisionhuancayo.com</p>
-              </div>
-            </div>
+         <footer className="mt-auto pt-3 border-t-[1.5px] border-red-600 text-center w-full">
+            <p className="text-red-600 font-black text-[14px] uppercase italic leading-none">4 AÑOS GARANTÍA EN EQUIPOS HIKVISION</p>
+            <p className="text-slate-300 font-bold text-[10px] uppercase mt-1 italic">www.hikvisionhuancayo.com</p>
          </footer>
       </div>
     </div>
