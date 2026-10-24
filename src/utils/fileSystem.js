@@ -70,7 +70,7 @@ export async function desvincularCarpeta() {
     }
 }
 
-export async function guardarPDFEnCarpeta(dirHandle, nombreArchivo, pdfBlob) {
+export async function guardarPDFEnCarpeta(dirHandle, nombreArchivo, pdfBlob, nombreArchivoAnterior = null) {
     if (!dirHandle) return { exito: false };
 
     try {
@@ -80,6 +80,11 @@ export async function guardarPDFEnCarpeta(dirHandle, nombreArchivo, pdfBlob) {
             if ((await dirHandle.requestPermission(opciones)) !== 'granted') {
                 return { exito: false, motivo: 'permiso_denegado' };
             }
+        }
+
+        // Si cambió el nombre del archivo al editar, eliminamos el archivo anterior para no dejar huérfanos
+        if (nombreArchivoAnterior && nombreArchivoAnterior !== nombreArchivo) {
+            await dirHandle.removeEntry(nombreArchivoAnterior).catch(() => {});
         }
 
         const fileHandle = await dirHandle.getFileHandle(nombreArchivo, { create: true });

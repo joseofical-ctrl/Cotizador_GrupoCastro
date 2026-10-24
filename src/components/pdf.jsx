@@ -3,10 +3,13 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { guardarPDFEnCarpeta } from '../utils/fileSystem.js';
+import { guardarCotizacion } from '../utils/apiService.js';
 
 export default function PDFPreview({
   items,
   cliente,
+  subtotal,
+  descuento,
   total,
   editId,
   dirHandle,
@@ -86,16 +89,14 @@ export default function PDFPreview({
         id: editId || Date.now(),
         cliente: { nombre: nombreClienteSeguro, direccion: direccionSegura, telefono: telefonoSeguro },
         items: [...items],
+        subtotal: formatearMoneda(subtotal),
+        descuento: Number(descuento || 0),
         total: formatearMoneda(total),
         fecha: proformaOriginal?.fecha || new Date().toLocaleString('es-PE'),
       };
 
-      const existeEnHistorial = editId && historialPrevio.some(cot => cot.id === editId);
-      const nuevoHistorial = existeEnHistorial
-        ? historialPrevio.map(cot => cot.id === editId ? cotizacionActual : cot)
-        : [cotizacionActual, ...historialPrevio].slice(0, 30);
-
-      localStorage.setItem('historialCotizaciones', JSON.stringify(nuevoHistorial));
+      // Guardar tanto en la Base de Datos de Hetzner como en localStorage
+      await guardarCotizacion(cotizacionActual, Boolean(editId));
 
       const agregarFooter = (documento) => {
         const footerLineY = 282;
@@ -269,12 +270,25 @@ export default function PDFPreview({
         }
       });
 
-      let totalY = doc.lastAutoTable.finalY + 12;
+      const tieneDescuento = Number(descuento || 0) > 0;
+      let totalY = tieneDescuento ? doc.lastAutoTable.finalY + 20 : doc.lastAutoTable.finalY + 12;
 
       if (totalY > 265) {
         doc.addPage();
         agregarFooter(doc);
-        totalY = 25;
+        totalY = tieneDescuento ? 32 : 25;
+      }
+
+      if (tieneDescuento) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`SUBTOTAL: S/ ${formatearMoneda(subtotal)}`, 198, totalY - 11, { align: 'right' });
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(180, 0, 0);
+        doc.text(`DESCUENTO: - S/ ${formatearMoneda(descuento)}`, 198, totalY - 6, { align: 'right' });
       }
 
       const textoSuma = formatearMoneda(total);
@@ -322,11 +336,17 @@ export default function PDFPreview({
       const nombreArchivoLimpio = nombreClienteSeguro.replace(/[\\/:*?"<>|]/g, '_');
       const nombreFinal = `Proforma_GrupoCastro_${nombreArchivoLimpio}.pdf`;
 
+      let nombreArchivoAnterior = null;
+      if (editId && proformaOriginal?.cliente?.nombre) {
+        const nombreAntiguoSeguro = limpiarTextoPDF(proformaOriginal.cliente.nombre).trim().replace(/[\\/:*?"<>|]/g, '_');
+        nombreArchivoAnterior = `Proforma_GrupoCastro_${nombreAntiguoSeguro}.pdf`;
+      }
+
       // --- LÓGICA DE GUARDADO DIRECTO EN CARPETA ---
       if (dirHandle) {
         try {
           const pdfBlob = doc.output('blob');
-          const resultado = await guardarPDFEnCarpeta(dirHandle, nombreFinal, pdfBlob);
+          const resultado = await guardarPDFEnCarpeta(dirHandle, nombreFinal, pdfBlob, nombreArchivoAnterior);
           if (resultado.exito) {
             onDescargar('Guardado directo en carpeta ' + dirHandle.name);
             return;
@@ -447,9 +467,21 @@ export default function PDFPreview({
         </div>
 
         <div className="flex justify-end mb-8">
-          <div className="flex items-center gap-6 border-b-2 border-red-600 pb-1 px-2">
-            <span className="text-red-600 font-bold italic text-[12px] uppercase">Total a Pagar S/</span>
-            <span className="text-[28px] font-black text-red-700 whitespace-nowrap">{formatearMoneda(total)}</span>
+          <div className="flex flex-col items-end">
+            {Number(descuento || 0) > 0 && (
+              <div className="space-y-0.5 mb-2 text-right pr-2">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                  Subtotal: S/ {formatearMoneda(subtotal)}
+                </div>
+                <div className="text-[11px] font-bold text-red-600 uppercase tracking-wider font-mono">
+                  Descuento: - S/ {formatearMoneda(descuento)}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-6 border-b-2 border-red-600 pb-1 px-2">
+              <span className="text-red-600 font-bold italic text-[12px] uppercase">Total a Pagar S/</span>
+              <span className="text-[28px] font-black text-red-700 whitespace-nowrap">{formatearMoneda(total)}</span>
+            </div>
           </div>
         </div>
 

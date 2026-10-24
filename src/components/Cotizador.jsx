@@ -6,18 +6,35 @@ import {
   seleccionarCarpetaDestino,
   desvincularCarpeta
 } from '../utils/fileSystem.js';
+import {
+  obtenerSesionActual,
+  iniciarSesion,
+  cerrarSesion
+} from '../utils/apiService.js';
 
 export default function Cotizador() {
+  const [sesion, setSesion] = useState(obtenerSesionActual());
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginCargando, setLoginCargando] = useState(false);
+  const [mostrarPass, setMostrarPass] = useState(false);
+
   const [items, setItems] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [cliente, setCliente] = useState({ nombre: '', telefono: '', direccion: '' });
   const [cotizacionId, setCotizacionId] = useState(null);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [historialVersion, setHistorialVersion] = useState(0);
+  const [descuento, setDescuento] = useState('');
 
   // ESTADOS PARA GUARDADO DIRECTO EN CARPETA
   const [dirHandle, setDirHandle] = useState(null);
   const [notificacion, setNotificacion] = useState(null);
+
+  const rawBase = import.meta.env.BASE_URL || '/';
+  const baseUrl = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+  const logoPrincipal = `${baseUrl}logo-grupocastro.jpg`;
 
   const [formData, setFormData] = useState({
     marca: '',
@@ -28,10 +45,45 @@ export default function Cotizador() {
   });
 
   useEffect(() => {
+    // Verificar si existe sesión en localStorage al montar en cliente
+    const sesionGuardada = obtenerSesionActual();
+    if (sesionGuardada) setSesion(sesionGuardada);
+
     obtenerCarpetaGuardada().then(handle => {
       if (handle) setDirHandle(handle);
     });
   }, []);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginCargando(true);
+    try {
+      const res = await iniciarSesion(loginUser, loginPass);
+      if (res.ok) {
+        setSesion(res.sesion);
+        if (res.aviso) {
+          mostrarToast(res.aviso);
+        } else {
+          mostrarToast(`Bienvenido, ${res.sesion.usuario?.nombre || 'Administrador'}`);
+        }
+      } else {
+        setLoginError(res.error || 'Credenciales inválidas');
+      }
+    } catch (err) {
+      setLoginError('Error inesperado: ' + err.message);
+    } finally {
+      setLoginCargando(false);
+    }
+  };
+
+  const handleCerrarSesion = () => {
+    if (confirm("¿Estás seguro de que deseas cerrar sesión?")) {
+      cerrarSesion();
+      setSesion(null);
+      resetearTodo();
+    }
+  };
 
   const mostrarToast = (mensaje) => {
     setNotificacion(mensaje);
@@ -72,6 +124,7 @@ export default function Cotizador() {
       });
       setItems([...cot.items]);
       setCotizacionId(cot.id);
+      setDescuento(cot.descuento ? String(cot.descuento) : '');
       setEditandoProductoId(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -86,6 +139,7 @@ export default function Cotizador() {
     setCliente({ nombre: '', telefono: '', direccion: '' });
     setCotizacionId(null);
     setEditandoProductoId(null);
+    setDescuento('');
     setFormData({ marca: '', modelo: '', detalle: '', precioUnitario: '', cantidad: 1 });
   };
 
@@ -152,7 +206,122 @@ export default function Cotizador() {
     setFormData({ marca: '', modelo: '', detalle: '', precioUnitario: '', cantidad: 1 });
   };
 
-  const totalGeneral = items.reduce((acc, item) => acc + (Number(item.precioTotalFila) || 0), 0);
+  const subtotalGeneral = items.reduce((acc, item) => acc + (Number(item.precioTotalFila) || 0), 0);
+  const montoDescuento = Math.min(Math.max(parseFloat(descuento) || 0, 0), subtotalGeneral);
+  const totalGeneral = Math.max(subtotalGeneral - montoDescuento, 0);
+
+  // Si no hay sesión activa, mostrar Pantalla de Login Corporativa de Grupo Castro
+  if (!sesion) {
+    return (
+      <div className="max-w-md mx-auto my-8 p-4 font-sans text-slate-900">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden text-left transition-all">
+          {/* Barra roja superior */}
+          <div className="h-3 bg-gradient-to-r from-red-600 via-red-500 to-red-700"></div>
+
+          <div className="p-8 sm:p-10 space-y-6">
+            {/* Logo y Encabezado */}
+            <div className="text-center space-y-3">
+              <img
+                src={logoPrincipal}
+                alt="Grupo Castro"
+                className="h-16 mx-auto object-contain drop-shadow-sm"
+              />
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full inline-block mb-1">
+                  Acceso Corporativo
+                </span>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight uppercase">
+                  Cotizador Proformas
+                </h1>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  Huancayo - Junín
+                </p>
+              </div>
+            </div>
+
+            {/* Alerta de Error */}
+            {loginError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-start gap-2 shadow-xs">
+                <span className="text-base leading-none">⚠️</span>
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            {/* Formulario de Login */}
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  Usuario
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none text-sm">
+                    👤
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ingresa tu usuario"
+                    value={loginUser}
+                    onInput={(e) => setLoginUser(e.target.value)}
+                    disabled={loginCargando}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-200 text-sm font-medium transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none text-sm">
+                    🔒
+                  </span>
+                  <input
+                    type={mostrarPass ? "text" : "password"}
+                    required
+                    placeholder="••••••••"
+                    value={loginPass}
+                    onInput={(e) => setLoginPass(e.target.value)}
+                    disabled={loginCargando}
+                    className="w-full pl-10 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-200 text-sm font-medium transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPass(!mostrarPass)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs text-slate-400 hover:text-slate-600 font-bold"
+                  >
+                    {mostrarPass ? "Ocultar" : "Ver"}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginCargando}
+                className="w-full py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-red-600/30 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loginCargando ? (
+                  <>
+                    <span className="animate-spin text-base">⏳</span>
+                    <span>Verificando...</span>
+                  </>
+                ) : (
+                  <span>Ingresar al Sistema</span>
+                )}
+              </button>
+            </form>
+
+            <div className="pt-3 border-t border-slate-100 text-center">
+              <p className="text-xs text-slate-400">
+                Sistema privado de uso exclusivo — Grupo Castro
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 text-slate-900 font-sans">
@@ -180,6 +349,35 @@ export default function Cotizador() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Indicador de Estado de Conexión y Usuario */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${
+                sesion.modo === 'Nube (Hetzner)'
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  sesion.modo === 'Nube (Hetzner)' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                }`}
+              ></span>
+              {sesion.modo === 'Nube (Hetzner)' ? '☁️ Conectado BD' : '💻 Modo Local'}
+            </span>
+            <span className="text-xs font-bold text-slate-700 hidden sm:inline">
+              👤 {sesion.usuario?.nombre || sesion.usuario?.username || 'Admin'}
+            </span>
+            <button
+              type="button"
+              onClick={handleCerrarSesion}
+              className="text-[11px] font-bold text-red-600 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 px-2.5 py-1 rounded-lg transition-all uppercase cursor-pointer"
+              title="Cerrar Sesión"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+
           {dirHandle ? (
             <div className="flex items-center bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 gap-2">
               <span className="text-[11px] font-bold text-emerald-800">
@@ -205,7 +403,7 @@ export default function Cotizador() {
             <button
               type="button"
               onClick={configurarCarpeta}
-              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shadow-sm"
+              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
             >
               <span>📁</span> Configurar Carpeta de Guardado Directo
             </button>
@@ -302,12 +500,39 @@ export default function Cotizador() {
               </table>
             </div>
 
-            <div className="bg-slate-50 p-6 border-t-2 border-slate-200 flex justify-between items-center">
-              <div className="text-left">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] block">Suma Total de Proforma</span>
-                <span className="text-xs text-slate-500 italic uppercase font-bold tracking-tight">Válido por 5 días</span>
+            <div className="bg-slate-50 p-6 border-t-2 border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="text-left space-y-2">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] block">Suma Total de Proforma</span>
+                  <span className="text-xs text-slate-500 italic uppercase font-bold tracking-tight">Válido por 5 días</span>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <label htmlFor="input-descuento" className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    Descuento (S/):
+                  </label>
+                  <input
+                    id="input-descuento"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={descuento}
+                    onInput={(e) => setDescuento(e.target.value)}
+                    className="w-28 py-1.5 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-red-200 font-mono text-right font-bold text-slate-800 shadow-sm"
+                  />
+                </div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end self-end sm:self-center">
+                {montoDescuento > 0 && (
+                  <div className="space-y-0.5 mb-1 text-xs font-mono font-bold">
+                    <div className="text-slate-500">
+                      Subtotal: S/ {formatearMoneda(subtotalGeneral)}
+                    </div>
+                    <div className="text-emerald-600">
+                      Descuento: - S/ {formatearMoneda(montoDescuento)}
+                    </div>
+                  </div>
+                )}
                 <span className="text-4xl font-black text-red-600 font-mono tracking-tighter whitespace-nowrap">
                   S/ {formatearMoneda(totalGeneral)}
                 </span>
@@ -333,6 +558,8 @@ export default function Cotizador() {
         <PDFPreview
           items={items}
           cliente={cliente}
+          subtotal={subtotalGeneral}
+          descuento={montoDescuento}
           total={totalGeneral}
           editId={cotizacionId}
           dirHandle={dirHandle}
