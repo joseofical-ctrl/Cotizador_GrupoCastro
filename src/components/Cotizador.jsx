@@ -24,6 +24,7 @@ export default function Cotizador() {
   const [showModal, setShowModal] = useState(false);
   const [cliente, setCliente] = useState({ nombre: '', telefono: '', direccion: '' });
   const [cotizacionId, setCotizacionId] = useState(null);
+  const [soloExportarSinGuardar, setSoloExportarSinGuardar] = useState(false);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [historialVersion, setHistorialVersion] = useState(0);
   const [descuento, setDescuento] = useState('');
@@ -138,12 +139,18 @@ export default function Cotizador() {
     setItems([]);
     setCliente({ nombre: '', telefono: '', direccion: '' });
     setCotizacionId(null);
+    setSoloExportarSinGuardar(false);
     setEditandoProductoId(null);
     setDescuento('');
     setFormData({ marca: '', modelo: '', detalle: '', precioUnitario: '', cantidad: 1 });
   };
 
   const finalizarProceso = (mensajeGuardado) => {
+    if (soloExportarSinGuardar) {
+      setShowModal(false);
+      mostrarToast(mensajeGuardado || "PDF exportado (Sin modificar el registro original)");
+      return;
+    }
     setShowModal(false);
     resetearTodo();
     setHistorialVersion(v => v + 1);
@@ -334,7 +341,7 @@ export default function Cotizador() {
         </div>
       )}
 
-      <header className="flex flex-col md:flex-row items-center md:items-end justify-between gap-6 border-b-4 border-red-600 pb-6">
+      <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 md:gap-6 border-b-4 border-red-600 pb-5 md:pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-white text-[10px] font-bold px-2 py-0.5 rounded italic ${cotizacionId ? 'bg-blue-600' : 'bg-red-600'}`}>
@@ -342,51 +349,51 @@ export default function Cotizador() {
             </span>
             <h2 className="text-sm font-bold text-red-600 uppercase tracking-widest">GRUPO CASTRO</h2>
           </div>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase">
+          <h1 className="text-2xl sm:text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase">
             COTIZADOR DE PROFORMAS
           </h1>
-          <p className="text-slate-500 text-sm font-bold italic mt-1 text-left">Huancayo - Junín</p>
+          <p className="text-slate-500 text-xs sm:text-sm font-bold italic mt-0.5 text-left">Huancayo - Junín</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="w-full md:w-auto flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3">
           {/* Indicador de Estado de Conexión y Usuario */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
-            <span
-              className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${
-                sesion.modo === 'Nube (Hetzner)'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-amber-100 text-amber-800 border border-amber-300'
-              }`}
-            >
+          <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 shadow-xs">
+            <div className="flex items-center gap-2 min-w-0">
               <span
-                className={`w-2 h-2 rounded-full ${
-                  sesion.modo === 'Nube (Hetzner)' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                }`}
-              ></span>
-              {sesion.modo === 'Nube (Hetzner)' ? '☁️ Conectado BD' : '💻 Modo Local'}
-            </span>
-            <span className="text-xs font-bold text-slate-700 hidden sm:inline">
-              👤 {sesion.usuario?.nombre || sesion.usuario?.username || 'Admin'}
-            </span>
+                className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${sesion.modo === 'Nube (Hetzner)'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${sesion.modo === 'Nube (Hetzner)' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`}
+                ></span>
+                {sesion.modo === 'Nube (Hetzner)' ? '☁️ Conectado' : '💻 Modo Local'}
+              </span>
+              <span className="text-xs font-bold text-slate-700 truncate max-w-[120px] sm:max-w-none">
+                👤 {sesion.usuario?.nombre || sesion.usuario?.username || 'Admin'}
+              </span>
+            </div>
             <button
               type="button"
               onClick={handleCerrarSesion}
-              className="text-[11px] font-bold text-red-600 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 px-2.5 py-1 rounded-lg transition-all uppercase cursor-pointer"
+              className="text-[11px] font-bold text-red-600 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 px-2.5 py-1 rounded-lg transition-all uppercase cursor-pointer flex-shrink-0"
               title="Cerrar Sesión"
             >
-              Cerrar Sesión
+              Salir
             </button>
           </div>
 
           {dirHandle ? (
-            <div className="flex items-center bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 gap-2">
+            <div className="hidden md:flex items-center bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 gap-2">
               <span className="text-[11px] font-bold text-emerald-800">
                 📁 Autoguardado en: <strong className="uppercase">{dirHandle.name}</strong>
               </span>
               <button
                 type="button"
                 onClick={configurarCarpeta}
-                className="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg uppercase transition-colors"
+                className="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg uppercase transition-colors cursor-pointer"
               >
                 Cambiar
               </button>
@@ -394,7 +401,7 @@ export default function Cotizador() {
                 type="button"
                 onClick={quitarCarpeta}
                 title="Desvincular carpeta"
-                className="text-xs text-slate-400 hover:text-red-600 font-bold px-1"
+                className="text-xs text-slate-400 hover:text-red-600 font-bold px-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -403,7 +410,7 @@ export default function Cotizador() {
             <button
               type="button"
               onClick={configurarCarpeta}
-              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+              className="hidden md:flex text-xs font-bold text-slate-700 hover:text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2.5 rounded-xl transition-all items-center gap-2 shadow-sm cursor-pointer"
             >
               <span>📁</span> Configurar Carpeta de Guardado Directo
             </button>
@@ -413,7 +420,7 @@ export default function Cotizador() {
             <button
               type="button"
               onClick={limpiarFormulario}
-              className="text-xs font-bold text-slate-600 hover:text-red-600 bg-slate-100 hover:bg-red-50 px-4 py-2.5 rounded-xl transition-all uppercase tracking-wider"
+              className="w-full sm:w-auto text-center text-xs font-bold text-slate-600 hover:text-red-600 bg-slate-100 hover:bg-red-50 border border-slate-200 sm:border-transparent px-4 py-2.5 rounded-xl transition-all uppercase tracking-wider cursor-pointer"
             >
               {cotizacionId ? "Cancelar Edición / Nueva" : "Limpiar Todo"}
             </button>
@@ -423,56 +430,115 @@ export default function Cotizador() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
         <div className="lg:col-span-1 space-y-6">
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Datos del Cliente</h2>
             <div className="space-y-3">
-              <input type="text" placeholder="Nombre o Razón Social" value={cliente.nombre} onInput={(e) => setCliente({ ...cliente, nombre: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-red-200 transition-all" />
-              <input type="tel" placeholder="Número de celular" value={cliente.telefono} onInput={(e) => setCliente({ ...cliente, telefono: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-red-200 transition-all" />
-              <textarea placeholder="Dirección para la instalación" value={cliente.direccion} onInput={(e) => setCliente({ ...cliente, direccion: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-red-200 h-20 resize-none"></textarea>
+              <input
+                type="text"
+                placeholder="Nombre o Razón Social"
+                value={cliente.nombre}
+                onInput={(e) => setCliente({ ...cliente, nombre: e.target.value })}
+                className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm transition-all"
+              />
+              <input
+                type="tel"
+                placeholder="Número de celular"
+                value={cliente.telefono}
+                onInput={(e) => setCliente({ ...cliente, telefono: e.target.value })}
+                className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm transition-all"
+              />
+              <textarea
+                placeholder="Dirección para la instalación"
+                value={cliente.direccion}
+                onInput={(e) => setCliente({ ...cliente, direccion: e.target.value })}
+                className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm h-20 resize-none transition-all"
+              ></textarea>
             </div>
           </section>
 
-          <form onSubmit={agregarProducto} className={`bg-white p-6 rounded-2xl shadow-md border-t-8 space-y-4 transition-colors ${editandoProductoId ? 'border-orange-500' : 'border-red-600'}`}>
-            <div className="flex justify-between items-center mb-2">
+          <form onSubmit={agregarProducto} className={`bg-white p-5 sm:p-6 rounded-2xl shadow-md border-t-8 space-y-4 transition-colors ${editandoProductoId ? 'border-orange-500' : 'border-red-600'}`}>
+            <div className="flex justify-between items-center mb-1">
               <h2 className={`text-xs font-bold uppercase tracking-widest ${editandoProductoId ? 'text-orange-500' : 'text-red-600'}`}>
                 {editandoProductoId ? 'Editando Equipo' : 'Detalle de Equipos'}
               </h2>
               {editandoProductoId && (
-                <button type="button" onClick={() => { setEditandoProductoId(null); setFormData({ marca: '', modelo: '', detalle: '', precioUnitario: '', cantidad: 1 }); }} className="text-[10px] text-slate-400 hover:text-slate-700 font-bold uppercase">
+                <button type="button" onClick={() => { setEditandoProductoId(null); setFormData({ marca: '', modelo: '', detalle: '', precioUnitario: '', cantidad: 1 }); }} className="text-[10px] text-slate-400 hover:text-slate-700 font-bold uppercase cursor-pointer">
                   Cancelar Edición
                 </button>
               )}
             </div>
 
-            <input type="text" placeholder="Descripción del producto" value={formData.marca} onInput={(e) => setFormData({ ...formData, marca: e.target.value })} className="w-full p-3 border rounded-xl outline-none focus:border-red-500" />
-            <input type="text" placeholder="Modelo" value={formData.modelo} onInput={(e) => setFormData({ ...formData, modelo: e.target.value })} className="w-full p-3 border rounded-xl outline-none focus:border-red-500" />
-            <textarea placeholder="Características técnicas (Opcional)" value={formData.detalle} onInput={(e) => setFormData({ ...formData, detalle: e.target.value })} className="w-full p-3 border rounded-xl outline-none focus:border-red-500 h-24 resize-none text-sm"></textarea>
+            <input
+              type="text"
+              placeholder="Descripción del producto (ej: Cámara Tubo IP)"
+              value={formData.marca}
+              onInput={(e) => setFormData({ ...formData, marca: e.target.value })}
+              className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm font-medium transition-all"
+            />
+            <input
+              type="text"
+              placeholder="Modelo (ej: DS-2CD1023G0E-I)"
+              value={formData.modelo}
+              onInput={(e) => setFormData({ ...formData, modelo: e.target.value })}
+              className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm font-medium transition-all"
+            />
+            <textarea
+              placeholder="Características técnicas (Opcional)"
+              value={formData.detalle}
+              onInput={(e) => setFormData({ ...formData, detalle: e.target.value })}
+              className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm h-24 resize-none transition-all"
+            ></textarea>
 
-            <div className="grid grid-cols-2 gap-4">
-              <input type="number" step="0.01" placeholder="P. Unit." value={formData.precioUnitario} onInput={(e) => setFormData({ ...formData, precioUnitario: e.target.value })} className="w-full p-3 border rounded-xl outline-none focus:border-red-500 font-mono" />
-              <input type="number" min="1" value={formData.cantidad} onInput={(e) => setFormData({ ...formData, cantidad: e.target.value })} className="w-full p-3 border rounded-xl outline-none focus:border-red-500 font-bold" />
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  Precio Unit. (S/)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={formData.precioUnitario}
+                  onInput={(e) => setFormData({ ...formData, precioUnitario: e.target.value })}
+                  className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm font-mono font-bold transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  Cantidad
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.cantidad}
+                  onInput={(e) => setFormData({ ...formData, cantidad: e.target.value })}
+                  className="w-full p-3 bg-slate-50/70 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-100 text-sm font-bold transition-all"
+                />
+              </div>
             </div>
-            <button type="submit" className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 uppercase ${editandoProductoId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}`}>
+            <button type="submit" className={`w-full text-white font-bold py-3.5 sm:py-4 rounded-xl shadow-lg transition-all active:scale-95 uppercase cursor-pointer ${editandoProductoId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}`}>
               {editandoProductoId ? 'Actualizar en la lista' : 'Añadir a la lista'}
             </button>
           </form>
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-            <div className="flex-grow overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[260px] lg:min-h-[500px]">
+            {/* VISTA PC: Tabla completa de 5 columnas (>= md) */}
+            <div className="flex-grow overflow-x-auto hidden md:block">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-800 text-white uppercase text-[10px] tracking-widest font-bold">
                     <th className="p-5">Descripción Equipo</th>
                     <th className="p-5 text-center">Cant.</th>
+                    <th className="p-5 text-right">P. Unit.</th>
                     <th className="p-5 text-right">Subtotal</th>
                     <th className="p-5 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {items.length === 0 ? (
-                    <tr><td colSpan="4" className="p-20 text-center text-slate-300 italic text-sm">No hay productos en la lista...</td></tr>
+                    <tr><td colSpan="5" className="p-20 text-center text-slate-300 italic text-sm">No hay productos en la lista...</td></tr>
                   ) : (
                     items.map((item) => (
                       <tr key={item.id} className={`transition-colors ${editandoProductoId === item.id ? 'bg-orange-50/50' : 'hover:bg-red-50/30'}`}>
@@ -486,12 +552,15 @@ export default function Cotizador() {
                           )}
                         </td>
                         <td className="p-5 text-center font-bold text-slate-600">{item.cantidad}</td>
+                        <td className="p-5 text-right font-bold text-slate-500 font-mono whitespace-nowrap">
+                          S/ {formatearMoneda(item.precioUnitario)}
+                        </td>
                         <td className="p-5 text-right font-black text-red-600 font-mono whitespace-nowrap">
                           S/ {formatearMoneda(item.precioTotalFila)}
                         </td>
                         <td className="p-5 text-center text-xs space-x-3 whitespace-nowrap">
-                          <button type="button" onClick={() => cargarProductoParaEdicion(item)} className="text-slate-400 hover:text-orange-500 font-bold uppercase transition-colors">Editar</button>
-                          <button type="button" onClick={() => setItems(items.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 font-bold uppercase transition-colors">Quitar</button>
+                          <button type="button" onClick={() => cargarProductoParaEdicion(item)} className="text-slate-400 hover:text-orange-500 font-bold uppercase transition-colors cursor-pointer">Editar</button>
+                          <button type="button" onClick={() => setItems(items.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 font-bold uppercase transition-colors cursor-pointer">Quitar</button>
                         </td>
                       </tr>
                     ))
@@ -500,14 +569,82 @@ export default function Cotizador() {
               </table>
             </div>
 
-            <div className="bg-slate-50 p-6 border-t-2 border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* VISTA MÓVIL: Tarjetas compactas en celulares (< md) */}
+            <div className="block md:hidden divide-y divide-slate-100 flex-grow">
+              {items.length === 0 ? (
+                <div className="p-12 text-center text-slate-300 italic text-sm">
+                  No hay productos en la lista...
+                </div>
+              ) : (
+                items.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-4 space-y-2.5 transition-colors ${editandoProductoId === item.id ? 'bg-orange-50/60' : 'hover:bg-slate-50/50'
+                      }`}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="text-left flex-1 min-w-0">
+                        <h4 className="font-bold text-slate-800 uppercase text-sm leading-snug break-words">
+                          {item.marca}
+                        </h4>
+                        {item.modelo && (
+                          <span className="text-xs text-slate-500 block font-medium">
+                            {item.modelo}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase">Subtotal</span>
+                        <span className="text-base font-black text-red-600 font-mono whitespace-nowrap">
+                          S/ {formatearMoneda(item.precioTotalFila)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {item.detalle && (
+                      <p className="text-xs text-slate-500 italic line-clamp-2 text-left bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                        {item.detalle}
+                      </p>
+                    )}
+
+                    <div className="bg-slate-50 px-3 py-2 rounded-xl flex justify-between items-center gap-2 border border-slate-100">
+                      <div className="text-xs font-mono text-slate-600 font-bold">
+                        Cant: <span className="text-slate-800">{item.cantidad}</span> × S/ {formatearMoneda(item.precioUnitario)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => cargarProductoParaEdicion(item)}
+                          className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg uppercase transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                        >
+                          <span>✏️</span> Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setItems(items.filter(i => i.id !== item.id))}
+                          className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg uppercase transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                        >
+                          <span>🗑️</span> Quitar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="bg-slate-50 p-4 sm:p-6 border-t-2 border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
               <div className="text-left space-y-2">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] block">Suma Total de Proforma</span>
-                  <span className="text-xs text-slate-500 italic uppercase font-bold tracking-tight">Válido por 5 días</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] block">
+                    Suma Total de Proforma
+                  </span>
+                  <span className="text-xs text-slate-500 italic uppercase font-bold tracking-tight">
+                    Válido por 5 días
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <label htmlFor="input-descuento" className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  <label htmlFor="input-descuento" className="text-xs font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                     Descuento (S/):
                   </label>
                   <input
@@ -522,7 +659,7 @@ export default function Cotizador() {
                   />
                 </div>
               </div>
-              <div className="text-right flex flex-col items-end self-end sm:self-center">
+              <div className="text-left sm:text-right flex flex-col items-start sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200">
                 {montoDescuento > 0 && (
                   <div className="space-y-0.5 mb-1 text-xs font-mono font-bold">
                     <div className="text-slate-500">
@@ -533,21 +670,52 @@ export default function Cotizador() {
                     </div>
                   </div>
                 )}
-                <span className="text-4xl font-black text-red-600 font-mono tracking-tighter whitespace-nowrap">
-                  S/ {formatearMoneda(totalGeneral)}
-                </span>
+                <div className="flex sm:flex-col items-baseline justify-between w-full sm:w-auto gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase sm:hidden">Total a pagar:</span>
+                  <span className="text-3xl sm:text-4xl font-black text-red-600 font-mono tracking-tighter whitespace-nowrap">
+                    S/ {formatearMoneda(totalGeneral)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
           {items.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all uppercase tracking-widest text-white ${cotizacionId ? 'bg-blue-600' : 'bg-slate-900'}`}
-            >
-              {cotizacionId ? "ACTUALIZAR REGISTRO" : "GENERAR PROFORMA PDF"}
-            </button>
+            cotizacionId ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSoloExportarSinGuardar(false);
+                    setShowModal(true);
+                  }}
+                  className="w-full py-5 rounded-2xl font-black text-base sm:text-lg shadow-xl flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] cursor-pointer"
+                >
+                  ACTUALIZAR REGISTRO
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSoloExportarSinGuardar(true);
+                    setShowModal(true);
+                  }}
+                  className="w-full py-5 rounded-2xl font-black text-base sm:text-lg shadow-xl flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-white bg-slate-800 hover:bg-slate-900 border-2 border-slate-700 active:scale-[0.98] cursor-pointer"
+                >
+                  EXPORTAR PDF (SIN GUARDAR)
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setSoloExportarSinGuardar(false);
+                  setShowModal(true);
+                }}
+                className="w-full py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all uppercase tracking-widest text-white bg-slate-900 hover:bg-slate-800 active:scale-[0.98] cursor-pointer"
+              >
+                GENERAR PROFORMA PDF
+              </button>
+            )
           )}
         </div>
       </div>
@@ -563,6 +731,7 @@ export default function Cotizador() {
           total={totalGeneral}
           editId={cotizacionId}
           dirHandle={dirHandle}
+          soloExportar={soloExportarSinGuardar}
           onCambiarCarpeta={configurarCarpeta}
           onVolver={cerrarModal}
           onDescargar={finalizarProceso}

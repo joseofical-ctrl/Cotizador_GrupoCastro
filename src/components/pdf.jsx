@@ -13,6 +13,7 @@ export default function PDFPreview({
   total,
   editId,
   dirHandle,
+  soloExportar = false,
   onCambiarCarpeta,
   onVolver,
   onDescargar
@@ -85,18 +86,20 @@ export default function PDFPreview({
       const direccionSegura = limpiarTextoPDF(cliente?.direccion || '').trim();
       const telefonoSeguro = limpiarTextoPDF(cliente?.telefono || '').trim();
 
-      const cotizacionActual = {
-        id: editId || Date.now(),
-        cliente: { nombre: nombreClienteSeguro, direccion: direccionSegura, telefono: telefonoSeguro },
-        items: [...items],
-        subtotal: formatearMoneda(subtotal),
-        descuento: Number(descuento || 0),
-        total: formatearMoneda(total),
-        fecha: proformaOriginal?.fecha || new Date().toLocaleString('es-PE'),
-      };
+      if (!soloExportar) {
+        const cotizacionActual = {
+          id: editId || Date.now(),
+          cliente: { nombre: nombreClienteSeguro, direccion: direccionSegura, telefono: telefonoSeguro },
+          items: [...items],
+          subtotal: formatearMoneda(subtotal),
+          descuento: Number(descuento || 0),
+          total: formatearMoneda(total),
+          fecha: proformaOriginal?.fecha || new Date().toLocaleString('es-PE'),
+        };
 
-      // Guardar tanto en la Base de Datos de Hetzner como en localStorage
-      await guardarCotizacion(cotizacionActual, Boolean(editId));
+        // Guardar tanto en la Base de Datos de Hetzner como en localStorage
+        await guardarCotizacion(cotizacionActual, Boolean(editId));
+      }
 
       const agregarFooter = (documento) => {
         const footerLineY = 282;
@@ -270,27 +273,35 @@ export default function PDFPreview({
         }
       });
 
-      const tieneDescuento = Number(descuento || 0) > 0;
-      let totalY = tieneDescuento ? doc.lastAutoTable.finalY + 20 : doc.lastAutoTable.finalY + 12;
+      const montoDesc = Number(descuento || 0);
+      const alturaBloqueTotales = montoDesc > 0 ? 28 : 14;
+      let cursorY = doc.lastAutoTable.finalY + 10;
 
-      if (totalY > 265) {
+      // Verificar que el bloque de totales no choque con el footer (Y=282)
+      if (cursorY + alturaBloqueTotales > 272) {
         doc.addPage();
         agregarFooter(doc);
-        totalY = tieneDescuento ? 32 : 25;
+        cursorY = 25;
       }
 
-      if (tieneDescuento) {
-        doc.setFont("helvetica", "normal");
+      if (montoDesc > 0) {
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`SUBTOTAL: S/ ${formatearMoneda(subtotal)}`, 198, totalY - 11, { align: 'right' });
+        doc.setTextColor(110, 110, 110);
+        doc.text(`SUBTOTAL: S/ ${formatearMoneda(subtotal)}`, 198, cursorY, { align: 'right' });
 
+        cursorY += 6; // Baja 6mm para el descuento
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.setTextColor(180, 0, 0);
-        doc.text(`DESCUENTO: - S/ ${formatearMoneda(descuento)}`, 198, totalY - 6, { align: 'right' });
+        doc.text(`DESCUENTO: - S/ ${formatearMoneda(montoDesc)}`, 198, cursorY, { align: 'right' });
+
+        cursorY += 12; // Baja 12mm completos para que la fuente de 24pt jamás pise al descuento
+      } else {
+        cursorY += 4;
       }
 
+      const totalY = cursorY;
       const textoSuma = formatearMoneda(total);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(24);
@@ -331,10 +342,31 @@ export default function PDFPreview({
       doc.setFont("helvetica", "normal");
       doc.text("1.- Duración de la Oferta: 5 días calendarios.", 12, terminosY);
       doc.text("2.- Pago del 100% al momento de iniciar la instalación de equipos.", 12, terminosY + 4);
-      doc.text("3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.", 12, terminosY + 8);
+      doc.text("3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443 o (064) 600070.", 12, terminosY + 8);
 
       const nombreArchivoLimpio = nombreClienteSeguro.replace(/[\\/:*?"<>|]/g, '_');
       const nombreFinal = `Proforma_GrupoCastro_${nombreArchivoLimpio}.pdf`;
+
+      // Si es solo exportación (sin guardar en BD ni sobrescribir/eliminar el original en PC)
+      if (soloExportar) {
+        const nombreExportacion = `Proforma_GrupoCastro_${nombreArchivoLimpio}_Editado.pdf`;
+        if (dirHandle) {
+          try {
+            const pdfBlob = doc.output('blob');
+            // Pasar nombreArchivoAnterior = null para jamás tocar ni borrar el PDF original
+            const resultado = await guardarPDFEnCarpeta(dirHandle, nombreExportacion, pdfBlob, null);
+            if (resultado.exito) {
+              onDescargar("PDF exportado sin alterar el registro original");
+              return;
+            }
+          } catch (errCarpeta) {
+            console.warn("No se pudo escribir en la carpeta vinculada, usando descarga normal:", errCarpeta);
+          }
+        }
+        doc.save(nombreFinal);
+        onDescargar("PDF exportado sin alterar el registro original");
+        return;
+      }
 
       let nombreArchivoAnterior = null;
       if (editId && proformaOriginal?.cliente?.nombre) {
@@ -368,16 +400,27 @@ export default function PDFPreview({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center p-4 overflow-y-auto backdrop-blur-sm">
-      <div className="flex flex-wrap items-center justify-center gap-3 mb-6 sticky top-0 z-[60]">
-        <button type="button" onClick={onVolver} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-full shadow-lg hover:bg-slate-100">
+    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+      <div className="w-full max-w-xl flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 sticky top-0 z-[60] px-2">
+        {soloExportar && (
+          <div className="w-full text-center mb-1">
+            <span className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1 sm:py-1.5 bg-amber-500/20 border border-amber-400 text-amber-300 font-black text-[11px] sm:text-xs rounded-full uppercase tracking-wider backdrop-blur-md shadow-lg text-center">
+              ⚡ MODO SOLO EXPORTACIÓN (NO MODIFICA EL ORIGINAL)
+            </span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onVolver}
+          className="px-5 sm:px-6 py-2 bg-white text-slate-700 font-bold text-xs sm:text-sm rounded-full shadow-lg hover:bg-slate-100 cursor-pointer transition-all active:scale-95"
+        >
           VOLVER
         </button>
 
         <button
           type="button"
           onClick={onCambiarCarpeta}
-          className="px-5 py-2 bg-slate-800 text-amber-300 border border-slate-600 font-bold rounded-full shadow-lg hover:bg-slate-700 text-xs uppercase transition-all"
+          className="hidden md:flex px-5 py-2 bg-slate-800 text-amber-300 border border-slate-600 font-bold rounded-full shadow-lg hover:bg-slate-700 text-xs uppercase transition-all cursor-pointer items-center gap-1.5"
         >
           📁 {dirHandle ? 'Carpeta: ' + dirHandle.name : 'Vincular Carpeta PC'}
         </button>
@@ -386,126 +429,134 @@ export default function PDFPreview({
           type="button"
           onClick={descargarPDF}
           disabled={guardando}
-          className="px-8 py-2 bg-[#d90000] text-white font-bold rounded-full shadow-lg hover:bg-red-700 uppercase transition-all disabled:opacity-50"
+          className={`px-5 sm:px-8 py-2 font-bold text-xs sm:text-sm rounded-full shadow-lg uppercase transition-all disabled:opacity-50 cursor-pointer active:scale-95 ${soloExportar
+            ? 'bg-slate-800 hover:bg-slate-900 border-2 border-slate-600 text-white'
+            : 'bg-[#d90000] text-white hover:bg-red-700'
+            }`}
         >
           {guardando
-            ? "Guardando..."
-            : dirHandle
-              ? `Guardar directo en "${dirHandle.name}"`
-              : (editId ? "Confirmar Cambios y Descargar" : "Descargar PDF")}
+            ? (soloExportar ? "Exportando..." : "Guardando...")
+            : soloExportar
+              ? "Descargar PDF (Sin Guardar Cambios)"
+              : dirHandle
+                ? `Guardar directo en "${dirHandle.name}"`
+                : (editId ? "Confirmar Cambios y Descargar" : "Descargar PDF")}
         </button>
       </div>
 
-      <div className="bg-white shadow-2xl flex-shrink-0 flex flex-col" style={{ width: '210mm', minHeight: '297mm', padding: '15mm' }}>
-        <header className="flex justify-between items-center mb-6 border-b-4 border-red-600 pb-4">
-          <img src={logoPrincipal} className="h-[20mm] w-auto object-contain" alt="Grupo Castro" />
-          <div className="grid grid-cols-2 gap-x-12 gap-y-2">
-            <img src={marcasLogos.hikvision} className="h-[6mm] w-auto object-contain grayscale" alt="Hikvision" />
-            <img src={marcasLogos.dahua} className="h-[6mm] w-auto object-contain grayscale" alt="Dahua" />
-            <img src={marcasLogos.starlink} className="h-[10mm] w-auto object-contain grayscale" alt="Starlink" />
-            <img src={marcasLogos.ezviz} className="h-[6mm] w-auto object-contain grayscale" alt="Ezviz" />
-          </div>
-          <div className="text-right text-[11px] text-slate-500 font-bold">
-            <p>RUC: 10446038643</p>
-            <p className="text-red-600 uppercase">Huancayo - Perú</p>
-          </div>
-        </header>
+      {/* Contenedor adaptativo de la hoja A4 */}
+      <div className="w-full flex justify-center overflow-x-auto pb-10 px-0 sm:px-4">
+        <div className="bg-white text-slate-900 shadow-2xl flex-shrink-0 flex flex-col w-full max-w-[210mm] min-h-[auto] md:min-h-[297mm] p-4 sm:p-6 md:p-[15mm] rounded-sm transition-all">
+          <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 border-b-4 border-red-600 pb-4 text-center sm:text-left">
+            <img src={logoPrincipal} className="h-14 sm:h-[18mm] md:h-[20mm] w-auto object-contain" alt="Grupo Castro" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-x-6 sm:gap-x-12 gap-y-2 items-center">
+              <img src={marcasLogos.hikvision} className="h-4 sm:h-[6mm] w-auto object-contain grayscale" alt="Hikvision" />
+              <img src={marcasLogos.dahua} className="h-4 sm:h-[6mm] w-auto object-contain grayscale" alt="Dahua" />
+              <img src={marcasLogos.starlink} className="h-6 sm:h-[10mm] w-auto object-contain grayscale" alt="Starlink" />
+              <img src={marcasLogos.ezviz} className="h-4 sm:h-[6mm] w-auto object-contain grayscale" alt="Ezviz" />
+            </div>
+            <div className="text-center sm:text-right text-[10px] sm:text-[11px] text-slate-500 font-bold">
+              <p>RUC: 10446038643</p>
+              <p className="text-red-600 uppercase">Huancayo - Perú</p>
+            </div>
+          </header>
 
-        <div className="mb-6">
-          <h3 className="text-[10px] font-bold text-red-600 mb-1 uppercase text-left">Datos del cliente</h3>
-          <div className="border border-slate-200 rounded-sm">
-            <table className="w-full text-[12px] border-collapse">
-              <tbody>
-                <tr className="border-b border-slate-100 text-left">
-                  <td className="font-bold py-2 px-3 w-[25mm] bg-slate-50 text-slate-900">CLIENTE:</td>
-                  <td className="py-2 px-3 uppercase text-slate-700">{cliente.nombre}</td>
-                  <td className="font-bold py-2 px-3 w-[25mm] text-right bg-slate-50 text-slate-900">FECHA:</td>
-                  <td className="py-2 px-3 text-right text-slate-700 font-medium">{fechaMostrar}</td>
+          <div className="mb-6 text-left">
+            <h3 className="text-[10px] font-bold text-red-600 mb-1 uppercase text-left">Datos del cliente</h3>
+            <div className="border border-slate-200 rounded-sm overflow-x-auto">
+              <table className="w-full text-[11px] sm:text-[12px] border-collapse min-w-[280px]">
+                <tbody>
+                  <tr className="border-b border-slate-100 text-left">
+                    <td className="font-bold py-2 px-2.5 sm:px-3 w-[20mm] sm:w-[25mm] bg-slate-50 text-slate-900 whitespace-nowrap">CLIENTE:</td>
+                    <td className="py-2 px-2.5 sm:px-3 uppercase text-slate-700">{cliente.nombre}</td>
+                    <td className="font-bold py-2 px-2.5 sm:px-3 w-[20mm] sm:w-[25mm] text-right bg-slate-50 text-slate-900 whitespace-nowrap">FECHA:</td>
+                    <td className="py-2 px-2.5 sm:px-3 text-right text-slate-700 font-medium whitespace-nowrap">{fechaMostrar}</td>
+                  </tr>
+                  <tr className="text-left">
+                    <td className="font-bold py-2 px-2.5 sm:px-3 w-[20mm] sm:w-[25mm] bg-slate-50 text-slate-900 whitespace-nowrap">DIRECCIÓN:</td>
+                    <td className="py-2 px-2.5 sm:px-3 uppercase text-slate-700">{cliente.direccion}</td>
+                    <td className="font-bold py-2 px-2.5 sm:px-3 w-[20mm] sm:w-[25mm] text-right bg-slate-50 text-slate-900 whitespace-nowrap">TELÉFONO:</td>
+                    <td className="py-2 px-2.5 sm:px-3 text-right text-slate-700 whitespace-nowrap">{cliente.telefono}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="border border-[#960000] rounded-sm overflow-x-auto mb-6">
+            <table className="w-full text-left min-w-[320px] sm:min-w-full">
+              <thead className="bg-[#960000] text-white text-[10px] sm:text-[11px] font-bold uppercase">
+                <tr>
+                  <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-[12mm] sm:w-[15mm] text-center">CANT</th>
+                  <th className="py-2.5 sm:py-3 px-2.5 sm:px-3 border-x border-white/20 text-left">DESCRIPCIÓN</th>
+                  <th className="py-2.5 sm:py-3 px-2 sm:px-3 text-right w-[20mm] sm:w-[25mm]">P. UNIT</th>
+                  <th className="py-2.5 sm:py-3 px-2 sm:px-3 text-right w-[20mm] sm:w-[25mm]">TOTAL</th>
                 </tr>
-                <tr className="text-left">
-                  <td className="font-bold py-2 px-3 w-[25mm] bg-slate-50 text-slate-900">DIRECCIÓN:</td>
-                  <td className="py-2 px-3 uppercase text-slate-700">{cliente.direccion}</td>
-                  <td className="font-bold py-2 px-3 w-[25mm] text-right bg-slate-50 text-slate-900">TELÉFONO:</td>
-                  <td className="py-2 px-3 text-right text-slate-700">{cliente.telefono}</td>
-                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-800">
+                {items.map((item, index) => [
+                  <tr key={`main-${index}`} className="text-[10px] sm:text-[11px] italic border-b border-slate-50">
+                    <td className="py-3 sm:py-4 px-2 sm:px-3 text-center font-bold text-slate-400 align-middle">{item.cantidad}</td>
+                    <td className="py-3 sm:py-4 px-2.5 sm:px-4 border-x border-slate-100 font-bold uppercase align-middle">
+                      {item.marca}
+                      <span className="block text-[9px] font-normal text-slate-500 mt-0.5 whitespace-normal break-words">{item.modelo}</span>
+                    </td>
+                    <td className="py-3 sm:py-4 px-2 sm:px-3 text-right font-mono text-slate-500 whitespace-nowrap align-middle">S/ {formatearMoneda(item.precioUnitario)}</td>
+                    <td className="py-3 sm:py-4 px-2 sm:px-3 text-right font-black text-red-600 whitespace-nowrap align-middle">S/ {formatearMoneda(item.precioTotalFila)}</td>
+                  </tr>,
+                  item.detalle && (
+                    <tr key={`det-${index}`} className="border-b border-slate-100 bg-white">
+                      <td colSpan="4" className="py-2 sm:py-3 pl-4 sm:pl-[18mm] pr-3 sm:pr-4 text-[9px] sm:text-[9.5px] font-normal text-slate-500 text-left leading-relaxed normal-case italic whitespace-pre-line">
+                        {limpiarTextoPDF(item.detalle)}
+                      </td>
+                    </tr>
+                  )
+                ])}
               </tbody>
             </table>
           </div>
-        </div>
 
-        <div className="border border-[#960000] rounded-sm overflow-hidden mb-6">
-          <table className="w-full text-left">
-            <thead className="bg-[#960000] text-white text-[11px] font-bold uppercase">
-              <tr>
-                <th className="py-3 px-3 w-[15mm] text-center">CANT</th>
-                <th className="py-3 px-3 border-x border-white/20 text-left">DESCRIPCIÓN</th>
-                <th className="py-3 px-3 text-right w-[25mm]">P. UNIT</th>
-                <th className="py-3 px-3 text-right w-[25mm]">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-800">
-              {items.map((item, index) => [
-                <tr key={`main-${index}`} className="text-[11px] italic border-b border-slate-50">
-                  <td className="py-4 px-3 text-center font-bold text-slate-400 align-middle">{item.cantidad}</td>
-                  <td className="py-4 px-4 border-x border-slate-100 font-bold uppercase align-middle">
-                    {item.marca}
-                    <span className="block text-[9px] font-normal text-slate-500 mt-0.5 whitespace-normal break-words">{item.modelo}</span>
-                  </td>
-                  <td className="py-4 px-3 text-right font-mono text-slate-500 whitespace-nowrap align-middle">S/ {formatearMoneda(item.precioUnitario)}</td>
-                  <td className="py-4 px-3 text-right font-black text-red-600 whitespace-nowrap align-middle">S/ {formatearMoneda(item.precioTotalFila)}</td>
-                </tr>,
-                item.detalle && (
-                  <tr key={`det-${index}`} className="border-b border-slate-100 bg-white">
-                    <td colSpan="4" className="py-3 pl-[18mm] pr-4 text-[9.5px] font-normal text-slate-500 text-left leading-relaxed normal-case italic whitespace-pre-line">
-                      {limpiarTextoPDF(item.detalle)}
-                    </td>
-                  </tr>
-                )
-              ])}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-end mb-8">
-          <div className="flex flex-col items-end">
-            {Number(descuento || 0) > 0 && (
-              <div className="space-y-0.5 mb-2 text-right pr-2">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">
-                  Subtotal: S/ {formatearMoneda(subtotal)}
+          <div className="flex justify-end mb-6 sm:mb-8">
+            <div className="flex flex-col items-end">
+              {Number(descuento || 0) > 0 && (
+                <div className="space-y-0.5 mb-2 text-right pr-2">
+                  <div className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                    Subtotal: S/ {formatearMoneda(subtotal)}
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] font-bold text-red-600 uppercase tracking-wider font-mono">
+                    Descuento: - S/ {formatearMoneda(descuento)}
+                  </div>
                 </div>
-                <div className="text-[11px] font-bold text-red-600 uppercase tracking-wider font-mono">
-                  Descuento: - S/ {formatearMoneda(descuento)}
-                </div>
+              )}
+              <div className="flex items-center gap-4 sm:gap-6 border-b-2 border-red-600 pb-1 px-2">
+                <span className="text-red-600 font-bold italic text-[11px] sm:text-[12px] uppercase whitespace-nowrap">Total a Pagar S/</span>
+                <span className="text-2xl sm:text-[28px] font-black text-red-700 whitespace-nowrap">{formatearMoneda(total)}</span>
               </div>
-            )}
-            <div className="flex items-center gap-6 border-b-2 border-red-600 pb-1 px-2">
-              <span className="text-red-600 font-bold italic text-[12px] uppercase">Total a Pagar S/</span>
-              <span className="text-[28px] font-black text-red-700 whitespace-nowrap">{formatearMoneda(total)}</span>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-start gap-8 px-2 mb-6">
-          {qrBase64 && <img src={qrBase64} className="w-[22mm] border border-slate-100 p-1" alt="QR Web" />}
-          <div className="pt-1">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Técnico Instalador</p>
-            <p className="text-[14px] font-black uppercase text-slate-800 leading-none">NILTON H. CASTRO M.</p>
-            <p className="text-[11px] font-bold text-red-600 mt-1">Cel. 993996443</p>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 sm:gap-8 px-2 mb-6">
+            {qrBase64 && <img src={qrBase64} className="w-16 h-16 sm:w-[22mm] sm:h-[22mm] border border-slate-100 p-1 flex-shrink-0" alt="QR Web" />}
+            <div className="pt-1 text-left">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Técnico Instalador</p>
+              <p className="text-xs sm:text-[14px] font-black uppercase text-slate-800 leading-none">NILTON H. CASTRO M.</p>
+              <p className="text-[11px] font-bold text-red-600 mt-1">Cel. 993996443</p>
+            </div>
           </div>
+
+          <div className="text-[9.5px] sm:text-[10px] space-y-1 text-slate-400 px-2 mb-6 text-left">
+            <p>1.- Duración de la Oferta: 5 días calendarios.</p>
+            <p>2.- Pago del 100% al momento de iniciar la instalación de equipos.</p>
+            <p>3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443 o (064) 600070.</p>
+          </div>
+
+          <div className="flex-grow"></div>
+
+          <footer className="mt-auto pt-3 border-t-[1.5px] border-red-600 text-center w-full">
+            <p className="text-red-600 font-black text-xs sm:text-[14px] uppercase italic leading-none">4 AÑOS GARANTÍA EN EQUIPOS HIKVISION</p>
+            <p className="text-slate-300 font-bold text-[9px] sm:text-[10px] uppercase mt-1 italic">www.hikvisionhuancayo.com</p>
+          </footer>
         </div>
-
-        <div className="text-[10px] space-y-1 text-slate-400 px-2 mb-6 text-left">
-          <p>1.- Duración de la Oferta: 5 días calendarios.</p>
-          <p>2.- Pago del 100% al momento de iniciar la instalación de equipos.</p>
-          <p>3.- Soporte ilimitado vía WhatsApp y Telefónico 993996443.</p>
-        </div>
-
-        <div className="flex-grow"></div>
-
-        <footer className="mt-auto pt-3 border-t-[1.5px] border-red-600 text-center w-full">
-          <p className="text-red-600 font-black text-[14px] uppercase italic leading-none">4 AÑOS GARANTÍA EN EQUIPOS HIKVISION</p>
-          <p className="text-slate-300 font-bold text-[10px] uppercase mt-1 italic">www.hikvisionhuancayo.com</p>
-        </footer>
       </div>
     </div>
   );
